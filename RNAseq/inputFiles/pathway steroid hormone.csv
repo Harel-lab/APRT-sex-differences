@@ -1,0 +1,12 @@
+﻿,ID,ONTOLOGY,Description
+1,GO:0008202,BP,steroid metabolic process
+2,GO:0010894,BP,negative regulation of steroid biosynthetic process
+3,GO:0048545,BP,response to steroid hormone
+4,GO:0045940,BP,positive regulation of steroid metabolic process
+5,GO:0043627,BP,response to estrogen
+6,GO:0071391,BP,cellular response to estrogen stimulus
+7,GO:0033146,BP,regulation of intracellular estrogen receptor signaling pathway
+8,GO:0033147,BP,negative regulation of intracellular estrogen receptor signaling pathway
+9,GO:0030539,BP,male genitalia development
+10,GO:0033574,BP,response to testosterone
+11,GO:0071394,BP,cellular response to testosterone stimulus

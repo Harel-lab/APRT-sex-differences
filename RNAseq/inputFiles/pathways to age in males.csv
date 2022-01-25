@@ -1,0 +1,18 @@
+﻿,function,ID,group,ONTOLOGY,Description
+1,Altered intercellular communication,GO:0071559,FULL_WT,BP,response to transforming growth factor beta
+2,Altered intercellular communication,GO:0048008,FULL_WT,BP,platelet-derived growth factor receptor signaling pathway
+3,Inflammaging,GO:0002253,FULL_WT+FULL_HET+FASTED_WT+FASTED_HET,BP,activation of immune response
+4,Inflammaging,GO:0032606,FULL_WT,BP,type I interferon production
+5,Deregulated nutrient-sensing,GO:0044241,FULL_WT,BP,lipid digestion
+6,Deregulated nutrient-sensing,GO:0030073,FULL_WT,BP,insulin secretion
+7,Epigenetic alterations,GO:0031497,FULL_WT+FULL_HET,BP,chromatin assembly
+8,Genomic instability,GO:0000077,FULL_WT+FULL_HET,BP,DNA damage checkpoint
+9,Genomic instability,GO:0072331,FULL_WT+FULL_HET,BP,signal transduction by p53 class mediator
+10,Loss of proteostasis,GO:1904666,FULL_WT,BP,regulation of ubiquitin protein ligase activity
+11,Loss of proteostasis,GO:0006415,FULL_WT,BP,translational termination
+12,Mitochondrial dysfunction,GO:0048285,FULL_WT+FULL_HET+FASTED_WT,BP,organelle fission
+13,Mitochondrial dysfunction,GO:0032543,FULL_WT,BP,mitochondrial translation
+14,Stem cell exhaustion,GO:0045165,FULL_WT,BP,cell fate commitment
+15,Stem cell exhaustion,GO:0071156,FULL_WT,BP,regulation of cell cycle arrest
+16,Telomere attrition,GO:0000723,FULL_WT+FULL_HET,BP,telomere maintenance
+17,Telomere attrition,GO:0032200,FULL_WT+FULL_HET,BP,telomere organization

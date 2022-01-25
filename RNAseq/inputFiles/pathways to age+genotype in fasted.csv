@@ -1,0 +1,10 @@
+﻿,ID,group,ONTOLOGY,Description
+1,GO:0042594,FEMALE,BP,response to starvation
+2,GO:0045765,FEMALE,BP,regulation of angiogenesis
+3,GO:0071396,FEMALE,BP,cellular response to lipid
+4,GO:0055089,FEMALE,BP,fatty acid homeostasis
+5,GO:0006914,MALE_FASTED+FEMALE,BP,autophagy
+7,GO:0000422,MALE_FASTED,BP,autophagy of mitochondrion
+8,GO:0061726,MALE_FASTED,BP,mitochondrion disassembly
+6,GO:0016236,MALE_FASTED,BP,macroautophagy
+9,GO:0048285,MALE_FULL+MALE_FASTED,BP,organelle fission
