@@ -49,5 +49,5 @@ STAR \
 We perform differential gene expression as a function of age, genotype, and the interaction between age and genotype was performed using the [edgeR](https://bioconductor.org/packages/release/bioc/html/edgeR.html) 3.32.1 and 
 Enriched Gene Ontology (GO) terms associated with transcripts levels were identified using Gene Set Enrichment Analysis (GSEA) implemented in R package [clusterProfiler](https://bioconductor.org/packages/release/bioc/html/clusterProfiler.html) 3.18.1 
 
-The analysis done by [Tehila Atlan] (https://github.com/tehila-atlan) (Harel-lab)
+The analysis done by [Tehila Atlan](https://github.com/tehila-atlan) (Harel-lab)
 RNA editing analyzed by Kobi Shapira from [Erez Levanon's lab](https://www.levanonlab.com/)
