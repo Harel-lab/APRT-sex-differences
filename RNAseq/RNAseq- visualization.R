@@ -12,7 +12,7 @@ library(curl)             #1.2.0
 library(clusterProfiler)  #4.0.5
 library(org.Hs.eg.db)     #3.13.0
 
-path <- '/RNAseq/'
+path <- 'C:/Users/tehil/Dropbox/paper/RNAseq/'
 load(paste0(path,'outputFiles/data.RData'))
 # To convert NCBI ids to human entrez ids. There are ways to adapt it for nfur only, but for now I do everything based on human orthologs
 humanKfConversion = read.table(paste0(path, "inputFiles/NCBI-Human-orthologs.txt"), head = T, sep = "\t")
@@ -21,7 +21,7 @@ humanKfConversion = read.table(paste0(path, "inputFiles/NCBI-Human-orthologs.txt
 barplotExpression <- function(gene){
   aprt <- data.frame(Exp = c(cpmMaleFull[gene,], cpmMaleFast[gene,], cpmFemale[gene,]), 
                      sample=DEobj$samples$sample, group=DEobj$samples$group, genotype=DEobj$samples$genotype, age=DEobj$samples$age)
-  aprt$newExp <- 2^aprt$Exp # CPM without log2
+  aprt$newExp <- 2^aprt$Exp -1 # CPM without log2
   
   #normalize each Het + wt by correspond average wt.
   averageGroups <- aggregate(aprt$newExp, list(aprt$group), mean)
@@ -559,4 +559,36 @@ pdf(paste0(path, 'figures/EnergyKEGG.pdf'))
 
 GSVAhm <- GSVAheatmap(cpmMaleFast, DEobj$samples[DEobj$samples$sex == 'male' & DEobj$samples$feed == 'fasted',], energy)
 draw(GSVAhm, column_title = "male fasted")
+dev.off()
+# AMPK subunits expression ----
+geneSetKf <- read.csv(paste0(path, 'inputFiles/ampk subunits.csv'), row.names=1)$symbol
+geneSetKf <- geneSetKf[geneSetKf %in% rownames(cpmMaleFull)]
+
+#heatmap
+pdf(paste0(path, '/figures/ampk heatmap_FC.pdf'))
+hm <- actualHeatmap(FCwtVShet[,c(1,4)], infoTableFCwtVShet[c(1,4),], geneSetKf, "increase in Het",
+                    filterGenes = F, clusterRows = F, geneOrder = geneSetKf, scaleT = F, show_column_names =F)
+draw(hm, column_title = "FC het/WT")
+dev.off()
+
+infoTable <- DEobj$samples[DEobj$samples$feed == 'full' & DEobj$samples$sex == 'male',]
+AMPKdata <- 2^cpmMaleFull[c('prkag1','LOC107383943'),]
+
+WTmeans <- rowMeans(AMPKdata[, infoTable[infoTable$age=='6.5weeks' & infoTable$genotype== 'WT',]$sample])
+
+AMPKsu <- merge(melt(AMPKdata[, infoTable$sample] / WTmeans), infoTable, by.x='Var2', by.y='sample')
+aprtPlot <- ggplot(AMPKsu[AMPKsu$Var1 == 'LOC107383943',], aes(x=Var1, y=value, xlab=group), fill='') +
+  geom_bar(stat='Summary', fun = 'mean', color="black", fill='white',  width=0.8, size=1, position = "dodge") +
+  geom_errorbar(stat = "Summary", fun.data = mean_se, width=0.8, size=0.7, position = "dodge") +
+  geom_point(position = position_dodge(width = 0.8), aes(x=Var1, color=group), size=2.5) +
+  scale_color_manual(values = c('black', '#008000', 'black', '#008000')) +
+  xlab("") +
+  #scale_y_continuous(limits = c(0,5.5), expand = c(0, 0)) +
+  #geom_hline(yintercept=0.5, linetype="dashed")+
+  theme_bw() +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        axis.text.y = element_text(color="black"), axis.text.x = element_text(color="black"))
+
+pdf(paste0(path, '/figures/AMPK subunits.pdf'), width = 4, height = 2)
+plot(aprtPlot)
 dev.off()
