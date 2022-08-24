@@ -18,7 +18,7 @@ We assume you have the following files:
 In our case, files 1-3 correspond to (1) `GCF_001465895.1_Nfu_20140520_genomic.fna`, (2) `GCF_001465895.1_Nfu_20140520_rna.fna`, and (3) `GCF_001465895.1_Nfu_20140520_genomic.gff` from the [Turquoise killifish RefSeq annotations](https://ftp.ncbi.nlm.nih.gov/genomes/refseq/vertebrate_other/Nothobranchius_furzeri/latest_assembly_versions/GCF_001465895.1_Nfu_20140520/), unzipped.
 The `CDS.gff` is easily created by selecting all `CDS` features from the `genomic.gff` file.
 The `repeats.gff` is the aligment of repetitive elements to the `genome.fasta`. In our case, the repetitive elements were annotated de-novo and aligned using [EDTA](https://github.com/oushujun/EDTA).
-In this manual, these files are assumed to be found in the `Data/Annotations` dir.
+In this manual, these files are assumed to be found in the `Data/Annotations` dir.  
 
 # RNA data
 
