@@ -25,7 +25,7 @@ library(ggforce)
 library(mutoss)
 library(ggConvexHull)
 
-path <- 'C:/Users/tehil/Dropbox/paper/metabolomicsLipidomic/'
+path <- 'C:/Users/tehil/Dropbox/Projects/APRT/paper/metabolomicsLipidomic/'
 
 # read metabolomics data----
 metabolomics <- read.csv(paste0(path, 'inputFiles/Polar compounds_norm_weight.csv'), row.names = 1)
@@ -35,7 +35,7 @@ metabolomics <- metabolomics[apply(metabolomics, 1, function(x){sum(x==0)}) < ro
 #read lipidomics data
 lipidomic <- read.csv(paste0(path, 'inputFiles/Lipids_norm_weight.csv'), row.names = 1)
 lipidomic <- lipidomic[apply(lipidomic, 1, function(x){sum(x==0)}) < round(ncol(lipidomic)*0.7),]
-lipid_groups <- gsub("\\(.*","",rownames(lipidomic)) #lipids speacies
+lipid_groups <-data.frame(lipid = rownames(lipidomic), species = gsub("\\(.*","",rownames(lipidomic))) #lipids species
 
 
 # read information about the samples----
@@ -188,7 +188,8 @@ heatmapLipids <- function(data.l, infoTable, hmName, splitBy=NA, sampleClusterin
     hr <- hclust(as.dist(1-cor(t(data.l), method="pearson"))) # Cluster rows by Pearson correlation.
   col_fun = circlize::colorRamp2(c(-2, 0, 2), c("blue", "white", "red"))
   data.scaled <- t(scale(t(data.l)))
-
+  #data.scaled <- data.l
+  
   cannotaion <- HeatmapAnnotation(age=infoTable$age, genotype=infoTable$genotype, feed=infoTable$feed,
                                   col = list(age=c('6.5weeks'='gray', '15weeks'='black'),
                                              genotype=c('WT'= 'blue', 'Het'='red'),
@@ -237,8 +238,7 @@ row.names(biocycData_mean) <- biocycData_mean$Group.1
 biocycData_mean <- biocycData_mean[,!colnames(biocycData_mean) %in% c("Group.1")]
 
 biocycData_mean <- t(biocycData_mean) # sample in columns
-biocycData_mean<- t(scale(t(biocycData_mean))) # biocycData_mean / apply(biocycData_mean, 1, scale)
-#write.table(biocycData_mean, paste0(path, 'outputFiles/PC norm weight newnames biocyc_mean.txt'), sep ='\t', quote = FALSE)
+write.table(biocycData_mean, paste0(path, 'outputFiles/PC norm weight newnames biocyc_mean.txt'), sep ='\t', quote = FALSE)
 # bioCyc: https://biocyc.org/dashboard/dashboard-intro.shtml
 
 
@@ -249,38 +249,13 @@ biocycData_mean<- t(scale(t(biocycData_mean))) # biocycData_mean / apply(biocycD
 metaboDataBiocycNames <- biocycData[,row.names(infoTable)]
 metabColNames <- c("mainGroup", "subPathway", "biocyc_short_names", "biocyc_full_names", "metabolite")
 
-# heatmap for all the metabolites
-HM_sample <- heatmapMetbolomics(metaboDataBiocycNames, infoTable, 'metabolomics')
-average.metab <- averageSamples(metaboDataBiocycNames, infoTable)
-HM_average <- heatmapMetbolomics(average.metab$meanData, average.metab$infoTable, 'metabolomics-average', show_column_names = F)
+# ---- statistic test wilcox----
+wilcoxOlds <- function(df){
+  df <- df[df$feed == 'fasted' & df$age == '15weeks',]
+  pval <- list(wilcox = wilcox.test(df$m ~ df$genotype)$p.value,
+               ttst = t.test(df$m ~ df$genotype)$p.value) 
 
-pdf(paste0(path, 'figures/SUP M heatmap all metabolites samples.pdf'), width = 8, height = 10)
-draw(HM_sample)
-dev.off()
-
-pdf(paste0(path, 'figures/M heatmap all metabolites average.pdf'), width = 7, height = 8)
-draw(HM_average)
-dev.off()
-# ---- statistic test two-way ANOVA + Tukey----
-anovaFULL <- function(df){
-  df <- df[df$feed == 'full',]
-  df$group <- paste(df$age, df$genotype)
-  aov.results <- aov(m ~ group, data=df)
-  pvals <- list(ANOVAfull = summary(aov.results)[[1]][["Pr(>F)"]][1])
-  return(pvals)
-}
-
-anova4groups.tukey <- function(df){
-  df$group <- paste(df$feed, df$age, df$genotype)
-  df$cluster[df$feed == 'full'] <- 'full'
-  df$cluster[df$age == '6.5weeks' & df$feed == 'fasted'] <- 'young'
-  df$cluster[df$age == '15weeks' & df$feed == 'fasted' & df$genotype == 'WT'] <- 'oldWT'
-  df$cluster[df$age == '15weeks' & df$feed == 'fasted' & df$genotype == 'Het'] <- 'oldHet'
-  aov.results <- aov(m ~ cluster, data = df)
-  pvals <- list(anova = summary(aov.results)[[1]][["Pr(>F)"]][1])
-  tukey <- data.frame(TukeyHSD(aov.results)[[1]])
-  pvals[rownames(tukey)] <- tukey$p.adj
-  return(pvals)
+  return(pval)
 }
 
 
@@ -293,105 +268,86 @@ metaboData <- metaboDataBiocycNames[,rownames(infoTable)]
 
 for (i in 1:nrow(metaboData)){
   df <- data.frame(m = unlist(metaboData[i,]), feed=infoTable$feed, age=infoTable$age, genotype=infoTable$genotype)
-  pvals <- anovaFULL(df)
-  statsMetabo[i, names(pvals)] <- pvals
-  pvals <- anova4groups.tukey(df)
+  pvals = wilcoxOlds(df)
   statsMetabo[i, names(pvals)] <- pvals
   }
 
-statsMetaboAdjust <- data.frame(statsMetabo)
-colnames(statsMetaboAdjust) <- colnames(statsMetabo)
-for (a in colnames(statsMetaboAdjust)){
-  statsMetaboAdjust[[a]] <- p.adjust(statsMetabo[[a]], method = 'fdr')
+statsMetabo$wilcoxFDR <- p.adjust(statsMetabo$wilcox, method = 'fdr')
+statsMetabo$ttstFDR <- p.adjust(statsMetabo$ttst, method = 'fdr')
+
+statsMetabo[order(statsMetabo$wilcox),]
+
+average.metab <- averageSamples(metaboDataBiocycNames, infoTable)
+average.metabAA <- average.metab$meanData[rownames(average.metab$meanData) %in% rownames(statsMetabo[statsMetabo$wilcox < 0.2, ]),]
+HM_average <- heatmapMetbolomics(average.metabAA, average.metab$infoTable, 'metabolomics-average', show_column_names = F)
+
+
+clasificationBioCyc <- read.csv(paste0(path, 'inputFiles/2021.05.11 BiocycTables.csv'))
+clasificationBioCyc <- merge(clasificationBioCyc, converting_M_names[c('biocyc_short_names', 'Biocyc_query')],
+                             by.x = 'metabolit', by.y='biocyc_short_names', all.x= T)
+clasificationBioCyc$all = 1
+clasificationBioCyc$sig = 0
+
+topMetabolites <- row.names(statsMetabo[order(statsMetabo$ttst),])[1:round(nrow(statsMetabo)*0.2)]
+topMetabolites = topMetabolites[!topMetabolites %in% topMetabolites[grep('NA', topMetabolites)]]
+
+pathways = c('Glycolysis', 'Carbohydrates and Carboxylates Metabolism',
+             'Pentose Phosphate Pathway', 'Amino Acid Metabolism')
+
+write.csv(clasificationBioCyc[clasificationBioCyc$subPathway %in% pathways,], paste0(path, 'inputFiles/2021.05.11 BiocycTables selected pathways.csv'))
+clasificationBioCyc <- read.csv(paste0(path, 'inputFiles/2021.05.11 BiocycTables selected pathways.csv'))
+
+write.csv(statsMetabo, paste0(path, 'outputFiles/stats metabolites.csv'))
+
+# dotplot 
+pdf(paste0(path, '/figures/new/Bars Metabo2.pdf'), width = 3, height = 3.5)
+for (p in unique(clasificationBioCyc$subPathway)){    #tail(aa$subPathway, 7)pathways
+  bbb <- biocycData_mean[row.names(biocycData_mean) %in% clasificationBioCyc[clasificationBioCyc$subPathway == p, ]$Biocyc_query,]
+  ddf <- melt(bbb, id.vars = 0)
+  colnames(ddf) <- c('metabolite', 'group', 'value')
+  print(dim(bbb))
+  hh = ggplot(ddf, aes(x=group, y=value)) +  
+    geom_bar(stat = "summary", fun = "mean", color="black", fill='white', width=0.7)+
+    geom_errorbar(stat = "Summary", fun.data = mean_se, width=0.3) +
+    geom_point(position = position_jitter( width = .0), size=2.5, aes(color = group), show.legend = FALSE) + 
+    scale_color_manual(values = c('black', '#008000', 'black', '#008000', 'black', '#008000', 'black', '#008000')) +
+    scale_y_continuous(limits = c(-0.02,2.5), expand = c(0, 0)) +
+    theme_classic() + labs(x="", y="", title=p, subtitle = paste('wilcox:', round(wilcox.test(bbb[,7], bbb[,8])$p.value,4),
+                                                                 't-test:', round(t.test(bbb[,7], bbb[,8])$p.value, 4))) 
+  
+  print(hh)
+}
+dev.off()
+
+pdf(paste0(path, '/figures/new/Heatmaps Metabo3.pdf'), width = 7, height = 4)
+for (p in unique(clasificationBioCyc$subPathway)){    #tail(aa$subPathway, 7)pathways
+  bbb <- biocycData_mean[row.names(biocycData_mean) %in% clasificationBioCyc[clasificationBioCyc$subPathway == p, ]$Biocyc_query,]
+
+  statsbbb <- statsMetabo[rownames(statsMetabo) %in% rownames(bbb), ]
+  statsbbb$ttstFDRnew <- p.adjust(statsbbb$ttst, method = 'fdr')
+  
+  topMetabolitesB <- row.names(statsbbb[order(statsbbb$ttst),])[1:round(nrow(statsbbb)*0.2)]
+  if (nrow(bbb) > 5)
+    bbb <- bbb[rownames(bbb) %in% topMetabolitesB,]
+  
+  print(p)
+  print(statsbbb[rownames(bbb),])
+
+  if (nrow(bbb) < 1)
+    next
+
+  average.metabAA <- average.metab$meanData[rownames(average.metab$meanData) %in% row.names(bbb),]
+  HM_average <- heatmapMetbolomics(average.metabAA, average.metab$infoTable, "average", show_column_names = F)
+  
+  draw(HM_average, column_title = p)
+   
 }
 
-
-#------- boxplot of each metabolite-------
-boxes <- list()
-for (metabolit in rownames(statsMetaboAdjust[statsMetaboAdjust$anova < 0.1 & statsMetaboAdjust$`oldWT-oldHet` < 0.1 & statsMetaboAdjust$`young-full` < 0.1,])){
-  df <- data.frame(m= unlist(metaboData[metabolit,]), genotype=infoTable$genotype, age=infoTable$age, feed=infoTable$feed,
-                   group=factor(gsub(' male', '', infoTable$group), levels = c("6.5weeks WT full", "6.5weeks Het full", "15weeks WT full", "15weeks Het full", "6.5weeks WT fasted", "6.5weeks Het fasted", "15weeks WT fasted", "15weeks Het fasted")))
-
-  boxp <- ggplot(df, aes(x=group, y=m)) +
-    geom_boxplot(color='black', fill = 'white', width=0.5, lwd=0.4, fatten = 0.8, outlier.shape = NA, coef=10) +
-    stat_summary(fun = max, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., group = group),
-                 width = 0.2, linetype = "solid", size=0.7)+
-    stat_summary(fun = min, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., group = group),
-                 width = 0.2, linetype = "solid", size=0.7)+
-    geom_jitter(width=0.1, size=2.2, aes(color=genotype)) +
-    scale_color_manual(values = c('black', '#098036'))+
-    xlab("") + ylab("") +
-    theme_classic() + 
-    #scale_y_continuous(limits = c(0.8,1.1), expand = c(0, 0)) +
-    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(size=0.3),
-          axis.ticks = element_line(color = 'black', size=0.3), axis.text.x = element_text(angle = 45, vjust = 0.5, color="black"),
-          plot.title = element_text(size=10), plot.subtitle = element_text(size=8), axis.text.y = element_text(color="black", size=13)) +
-    ggtitle(convertMetabolitesNames(metabolit),  subtitle = paste('ANOVA: ', round(statsMetaboAdjust[metabolit, 'anova'], 6),
-                                                                  ' full-young: ', round(statsMetaboAdjust[metabolit, 'young-full'], 6),
-                                                                  '\noldWT-oldHet: ', round(statsMetaboAdjust[metabolit, 'oldWT-oldHet'], 6),
-                                                                  ' oldHet-full: ', round(statsMetaboAdjust[metabolit, 'oldHet-full'], 6),
-                                                                  '\nyoung-oldHet: ', round(statsMetaboAdjust[metabolit, 'young-oldHet'], 6))) #oldWT  oldWTorFull
-  
-  boxes[[metabolit]] <- boxp
-}
-
-
-pdf(paste0(path, 'figures/boxplot sig metabolites ANOVA 4clusters.pdf'), width = 14, height = 13)
-grid.arrange(boxes[[1]], boxes[[2]], boxes[[3]], boxes[[4]], boxes[[5]], boxes[[6]],
-             boxes[[7]], ncol=3)
 dev.off()
 
-statsMetaboAdjust <- round(statsMetaboAdjust, 4)
-statsMetabo <- round(statsMetabo, 4)
-write.csv(statsMetaboAdjust, paste0(path, 'outputFiles/statistics Metabolites FDR.csv'))
 
 
-# heatmap order by biocyc pathway-----
-metaboDataAverage <- averageSamples(metaboDataBiocycNames, infoTable)
-selectedMetabolites <- read.csv(paste0(path, 'inputFiles/selected metabolites and pathways pattern.csv'))
-BioGly <- read.csv(paste0(path, 'inputFiles/selected metabolites for biosynthesis and glycolosis.csv'))
 
-selectedMetabolites$subPathway <- factor(selectedMetabolites$subPathway, levels = unique(selectedMetabolites$subPathway))
-selectedMetabolites$metabolite <- factor(selectedMetabolites$metabolite, levels = unique(selectedMetabolites$metabolite))
-
-
-orderMandHeatmap <- function(metabolitesInGroups, metaboDataBiocycNames, infoTable,...){
-  dataNumbersPathways <- merge(metabolitesInGroups, metaboDataBiocycNames, by.x = "metabolite", by.y = 0)
-  dataNumbersPathways <- dataNumbersPathways[,c(metabColNames, row.names(infoTable))]
-  
-  dataNumbersPathways <- dataNumbersPathways[order(dataNumbersPathways$subPathway),]
-  dataNumbersPathways <- dataNumbersPathways[order(dataNumbersPathways$mainGroup),]
-  
-  df <- as.matrix(dataNumbersPathways[, row.names(infoTable)])
-  row.names(df) <- dataNumbersPathways$metabolite
-  splitByM <- gsub('Degradation', 'Metabolism', dataNumbersPathways$subPathway)
-  splitByM <- gsub('noPathway', 'Others', splitByM)
-  hm = heatmapMetbolomics(df, infoTable, hmName = 'from biocyc', splitBy = splitByM, rowsClustering = T, cluster_row_slices = FALSE, ...)
-  return(hm)
-}
-
-hm_sample <- orderMandHeatmap(selectedMetabolites, metaboDataBiocycNames, infoTable)
-hm_average <- orderMandHeatmap(selectedMetabolites, metaboDataAverage$meanData, metaboDataAverage$infoTable, show_column_names = F)
-
-hm_sampleBG <- orderMandHeatmap(BioGly, metaboDataBiocycNames, infoTable)
-hm_averageBG <- orderMandHeatmap(BioGly, metaboDataAverage$meanData, metaboDataAverage$infoTable, show_column_names = F)
-
-#save heatmaps
-pdf(paste0(path, 'figures/SUP M heatmap patterned metabolites samples.pdf'), width = 12, height = 8)
-draw(hm_sample)
-dev.off()
-
-pdf(paste0(path, 'figures/M heatmap patterned metabolites average.pdf'), width = 10, height = 8)
-draw(hm_average)
-dev.off()
-
-pdf(paste0(path, 'figures/SUP M heatmap biosynthsis glycolosis samples.pdf'), width = 8, height = 6)
-draw(hm_sampleBG)
-dev.off()
-
-pdf(paste0(path, 'figures/M heatmap biosynthsis glycolosis average.pdf'), width = 8, height = 6)
-draw(hm_averageBG)
-dev.off()
 #----
 
 
@@ -399,21 +355,22 @@ dev.off()
 
 # **************lipidomics- heatmaps and statistics************------
 lipid_trend <- read.csv(paste0(path, 'inputFiles/lipids.csv'), row.names = 1)
-lipid_groups <- factor(lipid_groups, levels = rownames(lipid_trend))
+lipid_groups$species <- factor(lipid_groups$species, levels = rownames(lipid_trend))
 
 # heatmap with all lipids clustered in group. two heatmap- samples as is and average of the samples.
-HM_sampleLipids <- heatmapLipids(lipidomic, infoTableL, "lipidomic", lipid_groups, cluster_row_slices = FALSE, show_row_names = FALSE)
+HM_sampleLipids <- heatmapLipids(lipidomic, infoTableL, "lipidomic", lipid_groups$species, cluster_row_slices = FALSE, show_row_names = FALSE)
 average.lipid <- averageSamples(lipidomic, infoTableL)
 HM_averageLipids <- heatmapLipids(average.lipid$meanData, average.lipid$infoTable, "lipidomic-average",
-                                  lipid_groups, cluster_row_slices = FALSE, show_row_names = FALSE, show_column_names = FALSE,
-                                  border = F, row_gap = unit(0.5, "mm"))
+                                  lipid_groups$species, cluster_row_slices = FALSE, show_row_names = FALSE, show_column_names = FALSE,
+                                  border = T, row_gap = unit(0.8, "mm"))
 
-lipid_trend$lipid.family <- rownames(lipid_trend)
-lipids <- c('LPC', 'LPE', 'PI', 'PA', 'PS', 'SM')
-hm_sampleL <- heatmapLipids(lipidomic[lipid_groups %in% lipids,], infoTableL, "rescue lipids", lipid_groups[lipid_groups %in% lipids], cluster_row_slices = FALSE,
+
+#lipid_trend$lipid.family <- rownames(lipid_trend)
+lipids <- c('LPC', 'LPE', 'PI', 'PA', 'DG', 'TG')
+hm_sampleL <- heatmapLipids(lipidomic[lipid_groups$species %in% lipids,], infoTableL, "rescue lipids", lipid_groups$species[lipid_groups$species %in% lipids], cluster_row_slices = FALSE,
                             border=T, row_gap = unit(c(0.5, 0.5, 4, 0.5, 4, 4), "mm"))
-hm_averageL <- heatmapLipids(average.lipid$meanData[lipid_groups %in% lipids,], average.lipid$infoTable, "lipids-average", lipid_groups[lipid_groups %in% lipids],
-                             cluster_row_slices = FALSE, border=T, row_gap = unit(c(0.5, 0.5, 4, 0.5, 4, 4), "mm"), show_column_names = FALSE)
+hm_averageL <- heatmapLipids(average.lipid$meanData[lipid_groups$species %in% lipids,], average.lipid$infoTable, "lipids-average", lipid_groups$species[lipid_groups$species %in% lipids],
+                             cluster_row_slices = FALSE, border=T, row_gap = unit(2, "mm"), show_column_names = FALSE)
 
 
 # save heatmaps lipids----
@@ -421,7 +378,7 @@ pdf(paste0(path, 'figures/SUP L heatmap all lipids samples.pdf'), width = 13, he
 draw(HM_sampleLipids)
 dev.off()
 
-pdf(paste0(path, 'figures/L heatmap all lipids average.pdf'), width = 13, height = 11)
+pdf(paste0(path, 'figures/new/L heatmap all lipids average.pdf'), width = 13, height = 11)
 draw(HM_averageLipids)
 dev.off()
 
@@ -429,34 +386,68 @@ pdf(paste0(path, 'figures/SUP L heatmap selected families samples.pdf'), width =
 draw(hm_sampleL)
 dev.off()
 
-pdf(paste0(path, 'figures/L heatmap selected families average.pdf'), width = 10, height = 8)
+pdf(paste0(path, 'figures/new/L heatmap selected families average.pdf'), width = 10, height = 8)
 draw(hm_averageL)
 dev.off()
 
 # statistics for lipids----
+
+
 statsLipids <- data.frame(row.names = row.names(lipidomic),
                           no = rep(0, nrow(lipidomic)))
 
 for (i in 1:nrow(lipidomic)){
   df <- data.frame(m = unlist(lipidomic[i,]), feed=infoTableL$feed, age=infoTableL$age, genotype=infoTableL$genotype)
-  pvals <- anovaFULL(df)
-  statsLipids[i, names(pvals)] <- pvals
-  pvals <- anova4groups.tukey(df[df$feed=='fasted',])
+  pvals = wilcoxOlds(df)
   statsLipids[i, names(pvals)] <- pvals
 }
 
-statsLipidsAdjust <- data.frame(statsLipids)
-colnames(statsLipidsAdjust) <- colnames(statsLipids)
-for (a in colnames(statsLipidsAdjust)){
-  statsLipidsAdjust[[a]] <- p.adjust(statsLipids[[a]], method = 'fdr')
+statsLipids$wilcoxFDR <- p.adjust(statsLipids$wilcox, method = 'fdr')
+statsLipids$ttstFDR <- p.adjust(statsLipids$ttst, method = 'fdr')
+
+statsLipids[order(statsLipids$wilcox),]
+
+
+lipid_groups$all = 1
+lipid_groups$sig = 0
+
+topLipids <- row.names(statsLipids[order(statsLipids$ttst),])[1:round(nrow(statsLipids)*0.1)]
+topLipids = topLipids[!topLipids %in% topLipids[grep('NA', topLipids)]]
+
+lipidsFig = c('LPC(18:2) (1)', 'PI(17:0_20:4)', 'PA(40:5)', 'TG(25:0_18:1_18:2)')
+
+statsLipids[rownames(statsLipids) %in% lipidsFig,]
+
+#dotplot
+average.lipid <- averageSamples(lipidomic, infoTableL)
+ave.lipids = average.lipid$meanData 
+colnames(ave.lipids) = average.lipid$infoTable$group
+
+pdf(paste0(path, '/figures/new/Lipids2.pdf'))
+
+for (p in aa$species){
+  bbb <- ave.lipids[row.names(ave.lipids) %in% lipid_groups[lipid_groups$species == p, ]$lipid,]
+  ddf <- melt(bbb, id.vars = 0)
+  if (ncol(ddf) < 3)
+    next
+  colnames(ddf) <- c('lipid', 'group', 'value')
+  hh = ggplot(ddf, aes(x=group, y=value)) +  
+    geom_bar(stat = "summary", fun = "mean", aes(fill = group))+
+    geom_errorbar(stat = "Summary", fun.data = mean_se, width=0.3) +
+    geom_jitter(size=1, position = position_jitter( width = .05)) + 
+    theme_classic() + labs(x="", y="", title=p, subtitle = paste('wilcox:', wilcox.test(bbb[,7], bbb[,8])$p.value, 't-test:',t.test(bbb[,7], bbb[,8])$p.value)) 
+  print(hh)
 }
+dev.off()
 
 
-boxesL <- list()
-for (lipid in rownames(statsLipidsAdjust[statsLipidsAdjust$anova < 0.1,])){
+#box plot individual lipids
+pdf(paste0(path, 'figures/new/lipids boxplot.pdf'), width = 7, height = 7)
+plots = list()
+for (lipid in lipidsFig){
   df <- data.frame(m= unlist(lipidomic[lipid,]), genotype=infoTableL$genotype, feed=infoTableL$feed,
                    group=factor(gsub(' male', '', infoTableL$group), levels = c("6.5weeks WT full", "6.5weeks Het full", "15weeks WT full", "15weeks Het full", "6.5weeks WT fasted", "6.5weeks Het fasted", "15weeks WT fasted", "15weeks Het fasted")))
-  df <- df[df$feed == 'fasted', ]
+  #df <- df[df$feed == 'fasted', ]
   
   boxp <- ggplot(df, aes(x=group, y=m)) +
     geom_boxplot(color='black', fill = 'white', width=0.5, lwd=0.4, fatten = 0.8, outlier.shape = NA, coef=10) +
@@ -464,27 +455,26 @@ for (lipid in rownames(statsLipidsAdjust[statsLipidsAdjust$anova < 0.1,])){
                  width = 0.2, linetype = "solid", size=0.7)+
     stat_summary(fun = min, geom = "errorbar", aes(ymax = ..y.., ymin = ..y.., group = group),
                  width = 0.2, linetype = "solid", size=0.7)+
-    geom_jitter(width=0.1, size=2.2, aes(color=genotype)) +
+    geom_jitter(width=0.0, size=2.2, aes(color=genotype)) +
     scale_color_manual(values = c('black', '#098036'))+
     xlab("") + ylab("") +
     theme_classic() + 
     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.line = element_line(size=0.3),
-          axis.ticks = element_line(color = 'black', size=0.3), axis.text.x = element_text(angle = 45, vjust = 0.5, color="black"),
+          axis.ticks = element_line(color = 'black', size=0.3), axis.text.x = element_text(vjust = 0.5, color="black"),
           plot.title = element_text(size=10), plot.subtitle = element_text(size=8), axis.text.y = element_text(color="black", size=13)) +
-    ggtitle(lipid,  subtitle = paste('ANOVA: ', round(statsLipidsAdjust[lipid, 'anova'], 6),
-                                     ' oldWT-oldHet: ', round(statsLipidsAdjust[lipid, 'oldWT-oldHet'], 6),
-                                     '\nyoung-oldWT: ', round(statsLipidsAdjust[lipid, 'young-oldWT'], 6),
-                                     '\nyoung-oldHet: ', round(statsLipidsAdjust[lipid, 'young-oldHet'], 6)))
-  
-  boxesL[[lipid]] <- boxp
+    ggtitle(lipid)
+    plots[[lipid]] = boxp
+    #print(boxp)
 }
-
-
-pdf(paste0(path, 'figures/lipids boxplot fasted.pdf'), width = 9, height = 11)
-grid.arrange(boxesL$`SM(d43:1)`, boxesL$`SM(d35:1)`, boxesL$`SM(t38:1)`, boxesL$`PS(18:0_22:6) (1)`,
-             boxesL$`PI(17:0_20:4)`, boxesL$`SM(d41:1)`, boxesL$`LPE(16:0)`, boxesL$`LPC(18:2) (1)`, ncol=3)
 dev.off()
- 
+
+pdf(paste0(path, 'figures/new/lipids boxplot selected.pdf'), width = 8, height = 5)
+grid.arrange(plots$`LPC(18:2) (1)`, plots$`PI(17:0_20:4)`, 
+             plots$`PA(40:5)`, plots$`TG(25:0_18:1_18:2)`, nrow = 2)
+dev.off()
+
+
+
 statsLipidsAdjust <- round(statsLipidsAdjust, 4)
 statsLipids <- round(statsLipids, 4)
 write.csv(statsLipidsAdjust, paste0(path, 'outputFiles/statistics lipids FDR.csv'))
