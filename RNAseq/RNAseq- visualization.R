@@ -10,66 +10,14 @@ library(KEGGREST)         #1.32.0
 library(rjson)            #0.2.20
 library(curl)             #1.2.0
 library(clusterProfiler)  #4.0.5
-library(org.Hs.eg.db)     #3.13.0
 
-path <- 'C:/Users/tehil/Dropbox/paper/RNAseq/'
+
+path <- 'C:/Users/tehil/Dropbox/Projects/APRT/paper/RNAseq/'
 load(paste0(path,'outputFiles/data.RData'))
+
 # To convert NCBI ids to human entrez ids. There are ways to adapt it for nfur only, but for now I do everything based on human orthologs
 humanKfConversion = read.table(paste0(path, "inputFiles/NCBI-Human-orthologs.txt"), head = T, sep = "\t")
 
-# APRT expression----
-barplotExpression <- function(gene){
-  aprt <- data.frame(Exp = c(cpmMaleFull[gene,], cpmMaleFast[gene,], cpmFemale[gene,]), 
-                     sample=DEobj$samples$sample, group=DEobj$samples$group, genotype=DEobj$samples$genotype, age=DEobj$samples$age)
-  aprt$newExp <- 2^aprt$Exp -1 # CPM without log2
-  
-  #normalize each Het + wt by correspond average wt.
-  averageGroups <- aggregate(aprt$newExp, list(aprt$group), mean)
-  averageGroups$x[seq(from=2, to=12, length=6)] <- averageGroups$x[seq(from=2, to=12, length=6)-1] 
-  aprt = merge(aprt, averageGroups, by.x="group", by.y="Group.1", sort=F)
-  aprt$normExp = aprt$newExp / aprt$x
-  
-  # we combined young and old together, and did Wilcox test between WT and Het of each group.
-  # gruopsWtest- the group within Wilcox test. Wtest- the main group. e.g Wtest- male fully fed, groupWtest- WT male fully-fed, Het male fully-fed
-  aprt$groupWtest <- gsub('15weeks |6.5weeks ', '', aprt$group)
-  aprt$groupWtest <- factor(aprt$groupWtest, levels = unique(aprt$groupWtest))
-  aprt$Wtest <- gsub('WT |Het ', '', aprt$groupWtest)
-  aprt$Wtest <- factor(aprt$Wtest, levels = unique(aprt$Wtest))
-  
-  pvalsdf <- data.frame(matrix(0, ncol=5, nrow = 3))
-  colnames(pvalsdf) <- c('group1', 'group2', 'p', 'p.adj', 'y.position')
-  for (i in 1:length(unique(aprt$Wtest))){
-    pvalsdf[i, c('group1', 'group2')] = unique(aprt$groupWtest)[c(2*i-1,2*i)]
-    c1 <- aprt[aprt$Wtest == unique(aprt$Wtest)[i],]
-    pvalsdf[i, 'p'] <- wilcox.test(normExp ~ genotype, data=c1)$p.value
-  }
-  pvalsdf[, 'p.adj'] <- round(p.adjust(pvalsdf$p, method='fdr'), 4) 
-
-  pvalsdf$y.position <- 1.2
-  
-  #
-  aprtPlot <- ggplot(aprt, aes(x=groupWtest, y=normExp)) +
-    geom_bar(stat='Summary', fun = 'mean', color="black", fill='white', width=0.75, size=1) +
-    geom_errorbar(stat = "Summary", fun.data = mean_se, width=0.3) +
-    geom_point(position = position_jitter(width=0.15), aes(color=genotype), size=2.5) +
-    scale_color_manual(values = c('black', '#008000')) +
-    scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
-    stat_pvalue_manual(pvalsdf, label = 'p.adj', size = 4) +
-    ggtitle(toupper(gene)) +
-    xlab("") +
-    scale_y_continuous(limits = c(0,1.4), expand = c(0, 0)) +
-    geom_hline(yintercept=0.5, linetype="dashed")+
-    theme_bw() +
-    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-          axis.text.y = element_text(color="black"), axis.text.x = element_text(color="black"))
-
-  return(aprtPlot)
-}
-
-
-pdf(paste0(path, '/figures/APRT expression.pdf'), width = 5.5, height = 3)
-plot(barplotExpression('aprt'))
-dev.off()
 
 # functions----
 averageSamples <- function(cpm.data, infoTable){
@@ -98,7 +46,7 @@ averageSamplesDEobj <- function(DEobj){
 }
 convertLoc2symbol <- function(oldNames){
   # convert symbol to the final symbol.
-  NCBIgeneNames <- read.csv(paste0(path,'inputFiles/genes_names.csv'))
+  NCBIgeneNames <- read.csv("C:/Users/tehil/Dropbox/Projects/genes_names4.csv")
   names(NCBIgeneNames) <- c('NCBI', 'FinalSymbol', 'Human')
   head(NCBIgeneNames)
   newNames <- NCBIgeneNames[NCBIgeneNames$NCBI %in% oldNames,]
@@ -300,7 +248,7 @@ actualHeatmap <- function(cpm.data, infoData, geneList, goID, average=F, convert
   else{
     data.scaled <- as.matrix(cpm.data)
   }
-  
+  print(data.scaled)
   # used hierarchical clustering from another dataset
   if(hirerByAnoutherDS){
     geneList <- geneList[geneList %in% rownames(Adataset)]
@@ -414,49 +362,8 @@ GSVAheatmap <- function(cpmData, infoTable, geneSets){
 }
 # read the data for dots plots----
 GoCompareEnrichmentGroupAge <- read.xlsx(paste0(path, '/GO/Results/MergedAnalysis/GOBP_compare_age in all.xlsx'), sheetName = 'age')
-GoCompareEnrichmentGroupAge[,grep('NES', colnames(GoCompareEnrichmentGroupAge))] <- -GoCompareEnrichmentGroupAge[,grep('NES', colnames(GoCompareEnrichmentGroupAge))]
 
-GoCompareEnrichmentGroupGeno <- read.xlsx(paste0(path, '/GO/Results/MergedAnalysis/GOBP_compare_genotype in all.xlsx'), sheetName = 'genotype')
-GoCompareEnrichmentGroupGeno[,grep('NES', colnames(GoCompareEnrichmentGroupGeno))] <- -GoCompareEnrichmentGroupGeno[,grep('NES', colnames(GoCompareEnrichmentGroupGeno))]
-
-# age and genotype
-GoCompareEnrichmentGroup <- read.xlsx(paste0(path, '/GO/Results/MergedAnalysis/GOBP_compare_age+genotype in all.xlsx'), sheetName = 'age+genotype')
-
-# figure 2b----
-chosenPathways <- read.csv(paste0(path, 'inputFiles/pathways to age in males.csv'), row.names=1)
-godots <- GOdots(GoCompareEnrichmentGroupAge[,1:8], chosenPathways, c('FULL', 'FASTED'), "GO age in males WT fully-fed")
-pdf(paste0(path, 'figures/GO age in males WT fully-fed.pdf'))
-plot(godots)
-dev.off()
-# full vs fasted figure 2D (age + genotype)
-chosenPathways <- read.csv(paste0(path, 'inputFiles/pathways to age+genotype in males.csv'), row.names=1)
-godots <- GOdots(GoCompareEnrichmentGroup, chosenPathways, c('FULL', 'FASTED'), "GO age+genotype in males", c(1,2,3,4,5,6,7), c(21,19,19,19,19,19,19))
-pdf(paste0(path, 'figures/GO age+genotype in males.pdf'))
-plot(godots)
-dev.off()
-
-# inflammation- Figure S2c ----
-goID <-  c('GO:0045088')
-names(goID) <-  c('regulation of innate immune response')
-
-for (p in 1:length(goID)){
-  pdf(paste0(path, 'figures/Heatmap ', names(goID[p]), '2.pdf'))
-  
-  geneSetHuman <- unique(goAnno[goAnno$GOID == goID[p],]$SYMBOL)
-  geneSetKf <-c(humanKfConversion[humanKfConversion$human %in% geneSetHuman,]$ncbi)
- 
-  # male full average and sample
-  hm <- actualHeatmap(cpmMaleFull, DEobj$samples[DEobj$samples$sex == 'male' & DEobj$samples$feed == 'full',], geneSetKf, names(goID[p])) 
-  draw(hm, column_title = "male fully fed samples")
-   
-  # male fasted average and sample
-  hm <- actualHeatmap(cpmMaleFast, DEobj$samples[DEobj$samples$sex == 'male' & DEobj$samples$feed == 'fasted',], geneSetKf, names(goID[p])) 
-  draw(hm, column_title = "male fasted samples")
-
-  dev.off()
-}
-
-# comparison between ages in fasted (males and females, WT and Het)- Figure 4b and 4c----
+# comparison between ages in fasted (males and females, WT and Het)- Figure 1g
 chosenPathways <- read.csv(paste0(path, 'inputFiles/pathways age in fasted.csv'), row.names=1)
 goID <- chosenPathways$ID
 names(goID) <- chosenPathways$Description
@@ -466,63 +373,8 @@ pdf(paste0(path, 'figures/GO age in fasted.pdf'), width = 6.5, height = 4.5)
 plot(godots)
 dev.off()
 
-for (p in 1:length(goID)){
-  pdf(paste0(path, 'figures/FASTED AGE ', names(goID[p]), '.pdf'))
-  
-  geneSetHuman <- unique(goAnno[goAnno$GOID == goID[p],]$SYMBOL)
-  geneSetKf <-c(humanKfConversion[humanKfConversion$human %in% geneSetHuman,]$ncbi)
 
-  # FC between young and old
-  hm <- actualHeatmap(FCyVSo[,3:6], infoTableFCyVSo[3:6,], geneSetKf, "increase with age", scaleT = F, splitCol = 'sex',
-                      filterGenes = T, cutoff = log2(1.5), show_column_names =F) 
-  draw(hm, column_title = paste(names(goID[p]), "FC > 1.5, old/young"))
-  
-  dev.off()
-}
-
-
-# male vs female (age and genotype) - Figure 4d and S4c ----
-chosenPathways <- read.csv(paste0(path, 'inputFiles/pathways to age+genotype in fasted.csv'), row.names=1)
-goID <- chosenPathways$ID
-names(goID) <- chosenPathways$Description
-
-godots <- GOdots(GoCompareEnrichmentGroup, chosenPathways, c('MALE_FASTED', 'FEMALE'), "GO age+genotype in fasted", c(1,1.5,2), c(21,19,19))
-pdf(paste0(path, 'figures/GO age+genotype in fasted.pdf'), width = 5.5, height = 5.5)
-plot(godots)
-dev.off()
-
-for (p in 1:length(goID)){
-  pdf(paste0(path, 'figures/FASTED ', names(goID[p]), '.pdf'))
-  
-  geneSetHuman <- unique(goAnno[goAnno$GOID == goID[p],]$SYMBOL)
-  geneSetKf <-c(humanKfConversion[humanKfConversion$human %in% geneSetHuman,]$ncbi)
-  
-  #FC between WT and Het
-  cc <- c(2,3,5,6)
-  hm <- actualHeatmap(FCwtVShet[,cc], infoTableFCwtVShet[cc,], geneSetKf, "increase in Het", scaleT = F, splitCol = 'sex',
-                       filterGenes = T, cutoff = log2(1.5), show_column_names =F)   
-  draw(hm, column_title = paste(names(goID[p]), "FC > 1.5, Het/WT"))
-
-  dev.off()
-}
-
-# fission and fusion- Figure S4d ----
-geneSetKf <- read.csv(paste0(path, 'inputFiles/fission fusion biogenesis.csv'), row.names=1)$symbol
-pdf(paste0(path, "figures/Heatmap fusion fission and biogenesis.pdf"))
-infoTableFCwtVShet$feedsex <- factor(paste(infoTableFCwtVShet$feed, infoTableFCwtVShet$sex), levels = c('full male', 'fasted male', 'fasted female'))
-hm <- actualHeatmap(FCwtVShet[,c(2,3,5,6)], infoTableFCwtVShet[c(2,3,5,6),], geneSetKf, "increase in Het",
-                    filterGenes = F, clusterRows = F, geneOrder = geneSetKf, splitCol = 'feedsex', scaleT = F, show_column_names =F)
-draw(hm, column_title = "FC het/WT")
-dev.off()
-
-# GO age and genotype in all (4 pathways)- Figure S5b ----
-chosenPathways <- read.csv(paste0(path, 'inputFiles/pathways to age+genotype in all.csv'), row.names=1)
-godots <- GOdots(GoCompareEnrichmentGroup, chosenPathways, c('MALE_FULL', 'MALE_FASTED', 'FEMALE'), "GO age+genotype in all")
-pdf(paste0(path, 'figures/GO age+genotype in all.pdf'), width = 7, height = 3)
-plot(godots)
-dev.off()
-
-# GSVA- Steroid hormones, estrogen and testosterone Figure S6g----
+# GSVA- Steroid hormones, estrogen and testosterone Figure s3f----
 chosenPathways <- read.csv(paste0(path, 'inputFiles/pathway steroid hormone.csv'), row.names=1)
 goID <- chosenPathways$ID
 names(goID) <- chosenPathways$Description
@@ -536,14 +388,14 @@ for (p in 1:length(goID)){
 
 pdf(paste0(path, 'figures/SteroidEstrogenTestosterone.pdf'))
 
-GSVAhm <- GSVAheatmap(cpmMaleFast, DEobj$samples[DEobj$samples$sex == 'male' & DEobj$samples$feed == 'fasted',], geneSetList)
+GSVAhm <- GSVAheatmap(cpmMale, DEobj$samples[DEobj$samples$sex == 'male' & DEobj$samples$feed == 'fasted',], geneSetList)
 draw(GSVAhm, column_title = "male fasted")
 
 GSVAhm <- GSVAheatmap(cpmFemale, DEobj$samples[DEobj$samples$sex == 'female' & DEobj$samples$feed == 'fasted',], geneSetList)
 draw(GSVAhm, column_title = "female fasted")
 dev.off()
 
-# GSVA- energy pathways- KEGG Figure S7d----
+# GSVA- energy pathways- KEGG Figure S4d----
 res <- keggList("pathway", "hsa")
 names(res) <- gsub('path:', '', names(res))
 keggID <- c('hsa04152', 'hsa04150', 'hsa04935', 'hsa04910') # AMPK, mTOR, Growth hormone, insulin 
@@ -557,38 +409,162 @@ for (k in keggID){
 names(energy) <- gsub(' - Homo sapiens \\(human\\)', '', names(energy))
 pdf(paste0(path, 'figures/EnergyKEGG.pdf'))
 
-GSVAhm <- GSVAheatmap(cpmMaleFast, DEobj$samples[DEobj$samples$sex == 'male' & DEobj$samples$feed == 'fasted',], energy)
+GSVAhm <- GSVAheatmap(cpmMale, DEobj$samples[DEobj$samples$sex == 'male' & DEobj$samples$feed == 'fasted',], energy)
 draw(GSVAhm, column_title = "male fasted")
 dev.off()
-# AMPK subunits expression ----
-geneSetKf <- read.csv(paste0(path, 'inputFiles/ampk subunits.csv'), row.names=1)$symbol
-geneSetKf <- geneSetKf[geneSetKf %in% rownames(cpmMaleFull)]
 
-#heatmap
-pdf(paste0(path, '/figures/ampk heatmap_FC.pdf'))
-hm <- actualHeatmap(FCwtVShet[,c(1,4)], infoTableFCwtVShet[c(1,4),], geneSetKf, "increase in Het",
-                    filterGenes = F, clusterRows = F, geneOrder = geneSetKf, scaleT = F, show_column_names =F)
-draw(hm, column_title = "FC het/WT")
+
+# barplots ----
+barplotExpression <- function(gene){
+  #combined young and old together
+  infoData = DEobj$samples[DEobj$samples$feed == 'fasted', ]
+  aprt <- data.frame(Exp = c(cpmMale[gene,], cpmFemale[gene,]), 
+                     sample=infoData$sample, group=infoData$group, genotype=infoData$genotype, age=infoData$age)
+  aprt$newExp <- 2^aprt$Exp -1 # CPM without log2
+  
+  #normalize each Het + wt by correspond average wt.
+  averageGroups <- aggregate(aprt$newExp, list(aprt$group), mean)
+  averageGroups$x[seq(from=2, to=8, length=4)] <- averageGroups$x[seq(from=2, to=8, length=4)-1] 
+  aprt = merge(aprt, averageGroups, by.x="group", by.y="Group.1", sort=F)
+  aprt$normExp = aprt$newExp / aprt$x
+  
+  # we combined young and old together, and did Wilcox test between WT and Het of each group.
+  # gruopsWtest- the group within Wilcox test. Wtest- the main group. e.g Wtest- male fully fed, groupWtest- WT male fully-fed, Het male fully-fed
+  aprt$groupWtest <- gsub('15weeks |6.5weeks ', '', aprt$group)
+  aprt$groupWtest <- factor(aprt$groupWtest, levels = unique(aprt$groupWtest))
+  aprt$Wtest <- gsub('WT |Het ', '', aprt$groupWtest)
+  aprt$Wtest <- factor(aprt$Wtest, levels = unique(aprt$Wtest))
+  
+  pvalsdf <- data.frame(matrix(0, ncol=5, nrow = 2))
+  colnames(pvalsdf) <- c('group1', 'group2', 'p', 'p.adj', 'y.position')
+  for (i in 1:length(unique(aprt$Wtest))){
+    pvalsdf[i, c('group1', 'group2')] = unique(aprt$groupWtest)[c(2*i-1,2*i)]
+    c1 <- aprt[aprt$Wtest == unique(aprt$Wtest)[i],]
+    pvalsdf[i, 'p'] <- wilcox.test(normExp ~ genotype, data=c1)$p.value
+  }
+  pvalsdf[, 'p.adj'] <- round(p.adjust(pvalsdf$p, method='fdr'), 4) 
+  
+  pvalsdf$y.position <- 1.2
+  
+  #
+  aprtPlot <- ggplot(aprt, aes(x=groupWtest, y=normExp)) +
+    geom_bar(stat='Summary', fun = 'mean', color="black", fill='white', width=0.75, size=1) +
+    geom_errorbar(stat = "Summary", fun.data = mean_se, width=0.3) +
+    geom_point(position = position_jitter(width=0.15), aes(color=genotype), size=2.5) +
+    scale_color_manual(values = c('black', '#008000')) +
+    scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
+    stat_pvalue_manual(pvalsdf, label = 'p.adj', size = 4) +
+    ggtitle(toupper(gene)) +
+    xlab("") +
+    scale_y_continuous(limits = c(0,1.4), expand = c(0, 0)) +
+    geom_hline(yintercept=0.5, linetype="dashed")+
+    theme_bw() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          axis.text.y = element_text(color="black"), axis.text.x = element_text(color="black"))
+  
+  return(aprtPlot)
+}
+barplotExpression2 <- function(expp, infoData, gene, yaxis = c(0,10)){
+  # presenting all 4 groups
+  ppar <- data.frame(Exp = expp, 
+                     sample=infoData$sample, group=infoData$group, 
+                     genotype=infoData$genotype, age=infoData$age)
+  ppar$newExp <- 2^ppar$Exp -1 #cpm without log2
+  aa <- aggregate(ppar$newExp, list(ppar$group), mean)
+  aa$x[1:4] <- aa$x[1] #normalize the males to WT young male.
+  ppar = merge(ppar, aa, by.x="group", by.y="Group.1", sort=F)
+  ppar$normExp = ppar$newExp / ppar$x
+  
+  ppar$gg <- gsub('WT |Het ', '', ppar$group)
+  ppar$gg <- factor(ppar$gg, levels = unique(ppar$gg))
+  
+  pvalsdf <- data.frame(matrix(0, ncol=5, nrow = 4))   #####4
+  colnames(pvalsdf) <- c('group1', 'group2', 'p', 'p.adj', 'y.position')
+  
+  aov.results <- aov(Exp ~ group, data = ppar)
+  pvals <- list(anova = summary(aov.results)[[1]][["Pr(>F)"]][1])
+  tukey <- data.frame(TukeyHSD(aov.results)[[1]])
+  
+  print(pvals)
+  print(tukey)
+  
+  pparPlot <- ggplot(ppar, aes(x=group, y=normExp)) +
+    geom_bar(stat='Summary', fun = 'mean', color="black", fill='white', width=0.75, size=1) +
+    geom_errorbar(stat = "Summary", fun.data = mean_se, width=0.3) +
+    geom_point(position = position_jitter(width=0.15), aes(color=genotype), size=2.5) +
+    scale_color_manual(values = c('black', '#008000')) +
+    scale_x_discrete(guide = guide_axis(n.dodge = 4)) +
+    ggtitle(toupper(gene)) +
+    xlab("") +
+    scale_y_continuous(limits = yaxis, expand = c(0, 0)) +
+    theme_classic() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          axis.text.y = element_text(color="black"), axis.text.x = element_text(color="black"))
+  
+  pparPlot
+}
+barplotExpression3 <- function(gene){
+  #separate by genotype; 4 groups
+  infoMalesFast = DEobj$samples[DEobj$samples$feed =='fasted' & DEobj$samples$sex =='male',]
+  infoMalesFast$group = factor(infoMalesFast$group, levels = c('6.5weeks WT fasted male', '15weeks WT fasted male', '6.5weeks Het fasted male', '15weeks Het fasted male'))
+  ppar <- data.frame(Exp = c(cpmMale[gene,]), 
+                     sample=infoMalesFast$sample, group=infoMalesFast$group, 
+                     genotype=infoMalesFast$genotype, age=infoMalesFast$age)
+  ppar <- ppar[order(ppar$group),]
+  ppar$newExp <- 2^ppar$Exp -1 #cpm without log2
+  aa <- aggregate(ppar$newExp, list(ppar$group), mean)
+  aa$x[1:2] <- aa$x[1] #normalize the WTs to WT young male.
+  aa$x[3:4] <- aa$x[3] #normalize the Hets to Het young male.
+  
+  ppar = merge(ppar, aa, by.x="group", by.y="Group.1", sort=F)
+  ppar$normExp = ppar$newExp / ppar$x
+  
+  ppar$gg <- gsub('6.5weeks |15weeks ', '', ppar$group)
+  ppar$gg <- factor(ppar$gg, levels = unique(ppar$gg))
+  
+  pvalsdf <- data.frame(matrix(0, ncol=5, nrow = 2))   
+  colnames(pvalsdf) <- c('group1', 'group2', 'p', 'p.adj', 'y.position')
+  
+  for (i in 1:length(unique(ppar$gg))){
+    pvalsdf[i, c('group1', 'group2')] = unique(ppar$group)[c(2*i-1,2*i)]
+    c1 <- ppar[ppar$gg == unique(ppar$gg)[i],]
+    pvalsdf[i, 'p'] <- t.test(normExp ~ age, data=c1)$p.value
+  }
+  pvalsdf[, 'p.adj'] <- round(pvalsdf$p, 4)
+  
+  pvalsdf$y.position <- 2
+  
+  pparPlot <- ggplot(ppar, aes(x=group, y=normExp)) +
+    geom_bar(stat='Summary', fun = 'mean', color="black", fill='white', width=0.75, size=1) +
+    geom_errorbar(stat = "Summary", fun.data = mean_se, width=0.3) +
+    geom_point(position = position_jitter(width=0.15), aes(color=genotype), size=2.5) +
+    scale_color_manual(values = c('black',  '#008000')) +
+    scale_x_discrete(guide = guide_axis(n.dodge = 2)) +
+    stat_pvalue_manual(pvalsdf, label = 'p.adj', size = 4) +
+    ggtitle(toupper(gene)) +
+    xlab("") +
+    scale_y_continuous(limits = c(0,2.5), expand = c(0, 0)) +
+    theme_classic() +
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+          axis.text.y = element_text(color="black"), axis.text.x = element_text(color="black"))
+  
+  pparPlot
+}
+
+
+#figure S1g
+pdf(paste0(path, '/figures/APRT expression.pdf'), width = 5.5, height = 3)
+plot(barplotExpression('aprt'))
 dev.off()
 
-infoTable <- DEobj$samples[DEobj$samples$feed == 'full' & DEobj$samples$sex == 'male',]
-AMPKdata <- 2^cpmMaleFull[c('prkag1','LOC107383943'),]
-
-WTmeans <- rowMeans(AMPKdata[, infoTable[infoTable$age=='6.5weeks' & infoTable$genotype== 'WT',]$sample])
-
-AMPKsu <- merge(melt(AMPKdata[, infoTable$sample] / WTmeans), infoTable, by.x='Var2', by.y='sample')
-aprtPlot <- ggplot(AMPKsu[AMPKsu$Var1 == 'LOC107383943',], aes(x=Var1, y=value, xlab=group), fill='') +
-  geom_bar(stat='Summary', fun = 'mean', color="black", fill='white',  width=0.8, size=1, position = "dodge") +
-  geom_errorbar(stat = "Summary", fun.data = mean_se, width=0.8, size=0.7, position = "dodge") +
-  geom_point(position = position_dodge(width = 0.8), aes(x=Var1, color=group), size=2.5) +
-  scale_color_manual(values = c('black', '#008000', 'black', '#008000')) +
-  xlab("") +
-  #scale_y_continuous(limits = c(0,5.5), expand = c(0, 0)) +
-  #geom_hline(yintercept=0.5, linetype="dashed")+
-  theme_bw() +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        axis.text.y = element_text(color="black"), axis.text.x = element_text(color="black"))
-
-pdf(paste0(path, '/figures/AMPK subunits.pdf'), width = 4, height = 2)
-plot(aprtPlot)
+# figure s1i
+pdf(paste0(path, '/figures/UPP2 expression.pdf'), width = 5, height = 3)
+barplotExpression2(cpmMale['upp2',], DEobj$samples[DEobj$samples$feed =='fasted' & DEobj$samples$sex =='male',],'upp2', c(0,3))
+barplotExpression2(cpmFemale['upp2',], DEobj$samples[DEobj$samples$feed =='fasted' & DEobj$samples$sex =='female',],'upp2', c(0,3))
 dev.off()
+
+# figure s3d
+pdf(paste0(path, '/figures/PGC1a expression.pdf'), width = 5, height = 3)
+plot(barplotExpression3('ppargc1a'))
+dev.off()
+

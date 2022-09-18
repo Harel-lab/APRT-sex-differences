@@ -8,10 +8,11 @@ library(DOSE)             #3.18.3
 library(clusterProfiler)  #4.0.5
 library(org.Hs.eg.db)     #3.13.0
 library(BiocParallel)     #1.26.2
+library(gridExtra)
 
 # sources----
-path <- '/RNAseq/'
-expressionPath <- 'inputFiles/expression_matrix_RNAseq_star0621.csv'
+path <- 'C:/Users/tehil/Dropbox/Projects/APRT/paper/RNAseq/'
+expressionPath <- 'inputFiles/expression_matrix_RNAseq_star2206.csv' #0621.csv' 2204
 sampleInfoPath <- 'inputFiles/information_table_RNAseq.csv'
 
 #function
@@ -118,24 +119,24 @@ dataExplorer <- function(DEobj, titleG='', logTag = T, clusterSamples = F){
 
 # create DGE object and separate to three datasets- male fully fed, male fasted and female fasted.
 DEobj <- createDEGobject(path, expressionPath, sampleInfoPath)
-DEobjMaleFull <- filterNormDEGobject(DEobj[,DEobj$samples$sex == 'male' & DEobj$samples$feed == 'full'])
-DEobjMaleFast <- filterNormDEGobject(DEobj[,DEobj$samples$sex == 'male' & DEobj$samples$feed == 'fasted'])
+
+DEobj = DEobj[,!colnames(DEobj) %in% '35']
+DEobjMale <- filterNormDEGobject(DEobj[,DEobj$samples$sex == 'male' & DEobj$samples$feed == 'fasted'])
 DEobjFemale <- filterNormDEGobject(DEobj[,DEobj$samples$sex == 'female'])
 
 dev.off()
 
 
-maleFullGraphs <- dataExplorer(DEobjMaleFull, 'male fully fed')
-maleFastedGraphs <- dataExplorer(DEobjMaleFast, 'male fasted')
+maleGraphs <- dataExplorer(DEobjMale, 'male fasted')
 femaleGraphs <- dataExplorer(DEobjFemale, 'female fasted')
 
 #save the PCA graphs
-pdf(paste0(path, '/figures/PCA RNAseq.pdf'), width=17, height=18) 
-grid.arrange(maleFullGraphs$PCAlabels12, maleFastedGraphs$PCAlabels12, femaleGraphs$PCAlabels12, 
-             maleFullGraphs$PCAlabels13, maleFastedGraphs$PCAlabels13, femaleGraphs$PCAlabels13,
-             maleFullGraphs$PCAdots12,   maleFastedGraphs$PCAdots12,   femaleGraphs$PCAdots12,
-             maleFullGraphs$PCAdots13,   maleFastedGraphs$PCAdots13,   femaleGraphs$PCAdots13,
-             maleFullGraphs$knee,        maleFastedGraphs$knee,        femaleGraphs$knee, nrow = 5)
+pdf(paste0(path, '/figures/PCA RNAseq.pdf'), width=10, height=18) 
+grid.arrange(maleGraphs$PCAlabels12, femaleGraphs$PCAlabels12, 
+             maleGraphs$PCAlabels13, femaleGraphs$PCAlabels13,
+             maleGraphs$PCAdots12,   femaleGraphs$PCAdots12,
+             maleGraphs$PCAdots13,   femaleGraphs$PCAdots13,
+             maleGraphs$knee,        femaleGraphs$knee, nrow = 5)
 dev.off()
 
 # To convert NCBI ids to human entrez ids. There are ways to adapt it for Nfur only, but for now I do everything based on human orthologs
@@ -148,13 +149,18 @@ DErankingSaving <- function(DEobj, design, con, test, pathGL, saveRanking=F){
   DEobj <- estimateDisp(DEobj, design)
   fit <- glmQLFit(DEobj, design, robust = T)
   FC <- data.frame(row.names = row.names(DEobj))
+  pval <- data.frame(row.names = row.names(DEobj))
   FDR <- data.frame(row.names = row.names(DEobj))
   for (g in 1:length(con)){
     qlf <- glmQLFTest(fit, contrast = con[[g]])
     top <- topTags(qlf, n=Inf)$table
     print(names(con[g]))
+    print(paste('+', dim(top[top$FDR < 0.05 & top$logFC > 0,])))
+    print(paste('-', dim(top[top$FDR < 0.05 & top$logFC < 0,])))
+    print(head(top[top$FDR < 0.05 & top$logFC < 0,]))
     top$mlog10QvalxFC <- -log10(top$FDR) * top$logFC
     FC[[names(con)[g]]] <- top[rownames(FC),]$logFC
+    pval[[names(con)[g]]] <- top[rownames(pval),]$PValue
     FDR[[names(con)[g]]] <- top[rownames(FDR),]$FDR
     
     #saving the ranking list
@@ -162,7 +168,7 @@ DErankingSaving <- function(DEobj, design, con, test, pathGL, saveRanking=F){
     if (saveRanking)
       write.csv(ranking_genes, paste0(pathGL, 'ranking_', names(con[g]), ' ', test[g], '.csv'), row.names = F)
   }
-  return(list(fc=FC, fdr=FDR))
+  return(list(fc=FC, fdr=FDR, pval=pval))
 }
 
 # "6.5weeks WT fasted female" "6.5weeks Het fasted female" "15weeks WT fasted female" "15weeks Het fasted female" 
@@ -173,10 +179,17 @@ con <- list(YOUNG = c(1,-1,0,0),
             HET = c(0,1,0,-1),
             c(1,-1,-1,1))
 
+con <- list(YOUNG = c(-1,1,0,0),
+           OLD = c(0,0,-1,1),
+           WT = c(-1,0,1,0),
+           HET = c(0,-1,0,1),
+           c(1,-1,-1,1))
+
 tests <- c('genotype', 'genotype', 'age', 'age', 'age+genotype')
 
-experimentGroups <- list(MALE_FASTED = DEobjMaleFast, MALE_FULL = DEobjMaleFull, FEMALE = DEobjFemale)
+experimentGroups <- list(MALE = DEobjMale,FEMALE = DEobjFemale)
 FCs <- list()
+pvals <- list()
 FDRs <- list()
 
 for (i in 1:length(experimentGroups)){
@@ -188,8 +201,9 @@ for (i in 1:length(experimentGroups)){
   contrast_new <- con
   names(contrast_new) <- paste(names(experimentGroups)[i], names(contrast_new), sep = '_')
   
-  de <- DErankingSaving(y, design, contrast_new, tests, paste0(path, 'GO/GeneSets/'), T)
+  de <- DErankingSaving(y, design, contrast_new, tests, paste0(path, 'GO/GeneSets/'), F)
   FCs[[names(experimentGroups)[i]]] = de$fc
+  pvals[[names(experimentGroups)[i]]] = de$pval
   FDRs[[names(experimentGroups)[i]]] = de$fdr
 }
 
@@ -240,27 +254,30 @@ GSEAparam <- function(data, savePath, path){ # thanks for Param Priya Singh
 
 # run GSEA on all the ranking lists from the previous step
 files <- list.files(path=paste0(path, 'GO/GeneSets/'), pattern="*.csv")
-for (i in 1:length(files[1])){
+for (i in 1:length(files)){
   f <- gsub('.csv|ranking_', '', files[i])
   data = read.csv(paste0(path, 'GO/GeneSets/', files[i]))
   ego3 <- GSEAparam(data, f, path)
 }
 
 # calculate FC matrix for y/o and wt/het----
-cpmMaleFull <- log2(cpm(DEobjMaleFull, normalized.lib.sizes = T)+1)
-cpmMaleFast <- log2(cpm(DEobjMaleFast, normalized.lib.sizes = T)+1)
+cpmMale <- log2(cpm(DEobjMale, normalized.lib.sizes = T)+1)
 cpmFemale <- log2(cpm(DEobjFemale, normalized.lib.sizes = T)+1)
 
-FCall <- merge(merge(FCs$MALE_FULL, FCs$MALE_FASTED, by=0), FCs$FEMALE, by.x="Row.names", by.y=0)
+FCall <- merge(FCs$MALE, FCs$FEMALE, by=0)
 rownames(FCall) = FCall$Row.names
-FCall[-c(1,6,11,16)] = -FCall[-c(1,6,11,16)]  # change the direction for age, genotype but no in the interaction
+#FCall[-c(1,6,11,16)] = -FCall[-c(1,6,11,16)]  # change the direction for age, genotype but no in the interaction
 FCall = FCall[2:length(FCall)]
 
-FDRall <- merge(merge(FDRs$MALE_FULL, FDRs$MALE_FASTED, by=0), FDRs$FEMALE, by.x="Row.names", by.y=0)
+pvalall <- merge(pvals$MALE, pvals$FEMALE, by=0)
+rownames(pvalall) = pvalall$Row.names
+pvalall = pvalall[2:length(pvalall)]
+
+FDRall <- merge(FDRs$MALE, FDRs$FEMALE, by=0)
 rownames(FDRall) = FDRall$Row.names
 FDRall = FDRall[2:length(FDRall)]
 
-infoTableFC <- unique(DEobj$samples[,c('age', 'genotype', 'feed', 'sex', 'group')])
+infoTableFC <- unique(DEobj$samples[DEobj$samples$feed == 'fasted', c('age', 'genotype', 'feed', 'sex', 'group')])
 
 infoTableFC$age <- factor(infoTableFC$age, levels = c('6.5weeks', '15weeks'))
 infoTableFC$genotype <- factor(infoTableFC$genotype, levels = c('WT', 'Het'))
@@ -269,26 +286,41 @@ infoTableFC$sex <- factor(infoTableFC$sex, levels = c('male', 'female'))
 
 # fold change between WT and Het
 FCwtVShet <- FCall[,grep("YOUNG|OLD", colnames(FCall))]
+pvalwtVShet <- pvalall[,grep("YOUNG|OLD", colnames(pvalall))]
 FDRwtVShet <- FDRall[,grep("YOUNG|OLD", colnames(FDRall))]
 infoTableFCwtVShet <- infoTableFC[infoTableFC$genotype == 'WT',]
 infoTableFCwtVShet$genotype <- 'het/wt'
-colnames(FCwtVShet) <- 1:6
-colnames(FDRwtVShet) <- 1:6
-rownames(infoTableFCwtVShet) <- 1:6
+colnames(FCwtVShet) <- 1:4
+colnames(pvalwtVShet) <- 1:4
+colnames(FDRwtVShet) <- 1:4
+rownames(infoTableFCwtVShet) <- 1:4
 infoTableFCwtVShet <- infoTableFCwtVShet[order(infoTableFCwtVShet$age),]
 FCwtVShet <- FCwtVShet[,rownames(infoTableFCwtVShet)]
+pvalwtVShet <- pvalwtVShet[,rownames(infoTableFCwtVShet)]
 FDRwtVShet <- FDRwtVShet[,rownames(infoTableFCwtVShet)]
 
 # fold change between young and old
 FCyVSo <- FCall[,grep("WT|HET", colnames(FCall))]
+pvalyVSo <- pvalall[,grep("WT|HET", colnames(pvalall))]
 FDRyVSo <- FDRall[,grep("WT|HET", colnames(FDRall))]
 infoTableFCyVSo <- infoTableFC[infoTableFC$age == '6.5weeks',]
 infoTableFCyVSo$age <- 'o/y'
-colnames(FCyVSo) <- 1:6
-colnames(FDRyVSo) <- 1:6
-rownames(infoTableFCyVSo) <- 1:6
+colnames(FCyVSo) <- 1:4
+colnames(FDRyVSo) <- 1:4
+colnames(pvalyVSo) <- 1:4
+rownames(infoTableFCyVSo) <- 1:4
+
 
 # saving the object to the visualization script----
-save(DEobj, cpmMaleFull, cpmMaleFast, cpmFemale, 
+save(DEobj, cpmMale, cpmFemale, 
      FCwtVShet, FDRwtVShet, infoTableFCwtVShet, 
      FCyVSo, FDRyVSo, infoTableFCyVSo, file = paste0(path,'outputFiles/data.RData'))
+
+
+colnames(FCyVSo) <- infoTableFCyVSo$group
+colnames(FDRyVSo) <- infoTableFCyVSo$group
+colnames(pvalyVSo) <- infoTableFCyVSo$group
+
+write.csv(FCyVSo, paste0(path, 'outputFiles/FC.csv'))
+write.csv(FDRyVSo, paste0(path, 'outputFiles/FDR.csv'))
+write.csv(pvalyVSo, paste0(path, 'outputFiles/pval.csv'))
