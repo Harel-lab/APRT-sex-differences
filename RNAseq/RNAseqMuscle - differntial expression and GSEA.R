@@ -11,10 +11,9 @@ library(BiocParallel)     #1.26.2
 library(gridExtra)
 
 # sources----
-path <- 'C:/Users/tehil/Dropbox/Projects/APRT/paper/RNAseqMuscle/'
-expressionPath <- 'inputFiles/matrix_expression_RNAseq_star2301_2.csv' #0621.csv' 2204
+path <- 'RNAseqMuscle/'
+expressionPath <- 'inputFiles/matrix_expression_RNAseq_star2301_2.csv' 
 sampleInfoPath <- 'inputFiles/information_table_RNAseq.csv'
-
 
 
 #function
@@ -42,7 +41,6 @@ createDEGobject <- function(path, expPath, infoPath){
   # create DGE object
   DEobj <- DGEList(exMatrix, samples = infoTable, group=paste(infoTable$age, infoTable$genotype, infoTable$feed, infoTable$sex),
                     genes = row.names(exMatrix))
-  
   DEobj <- DEobj[,order(DEobj$samples$genotype)]
   DEobj <- DEobj[,order(DEobj$samples$age)]
   DEobj <- DEobj[,order(DEobj$samples$feed)]
@@ -127,21 +125,18 @@ DEobj <- filterNormDEGobject(DEobj)
 
 AllGraphs <- dataExplorer(DEobj, 'all')
 
-maleFullGraphs <- dataExplorer(DEobj[,DEobj$samples$sex == 'male' & DEobj$samples$feed == 'full'], 'male full')
 maleFastGraphs <- dataExplorer(DEobj[,DEobj$samples$sex == 'male' & DEobj$samples$feed == 'fasted'], 'male fasted')
-femaleFullGraphs <- dataExplorer(DEobj[,DEobj$samples$sex == 'female' & DEobj$samples$feed == 'full'], 'female full')
 femaleFastGraphs <- dataExplorer(DEobj[,DEobj$samples$sex == 'female' & DEobj$samples$feed == 'fasted'], 'female fasted')
 
 mfFastGraphs <- dataExplorer(DEobj[,DEobj$samples$genotype == 'WT' & DEobj$samples$feed == 'fasted'], 'fast WT')
-mfFullGraphs <- dataExplorer(DEobj[,DEobj$samples$genotype == 'WT' & DEobj$samples$feed == 'full'], 'full WT')
 
 #save the PCA graphs
-pdf(paste0(path, '/figures/PCA RNAseq new.pdf'), width=20, height=18) 
-grid.arrange(maleFullGraphs$PCAlabels12, maleFastGraphs$PCAlabels12, femaleFullGraphs$PCAlabels12, femaleFastGraphs$PCAlabels12, 
-             maleFullGraphs$PCAlabels13, maleFastGraphs$PCAlabels13, femaleFullGraphs$PCAlabels13, femaleFastGraphs$PCAlabels13,
-             maleFullGraphs$PCAdots12,   maleFastGraphs$PCAdots12,   femaleFullGraphs$PCAdots12,   femaleFastGraphs$PCAdots12,
-             maleFullGraphs$PCAdots12,   maleFastGraphs$PCAdots13,   femaleFullGraphs$PCAdots13,   femaleFastGraphs$PCAdots13,
-             maleFullGraphs$knee,        maleFastGraphs$knee,        femaleFullGraphs$knee,        femaleFastGraphs$knee, nrow = 5)
+pdf(paste0(path, '/figures/PCA RNAseq new.pdf'), width=10, height=18) 
+grid.arrange(maleFastGraphs$PCAlabels12, femaleFastGraphs$PCAlabels12, 
+             maleFastGraphs$PCAlabels13, femaleFastGraphs$PCAlabels13,
+             maleFastGraphs$PCAdots12,   femaleFastGraphs$PCAdots12,
+             maleFastGraphs$PCAdots13,   femaleFastGraphs$PCAdots13,
+             maleFastGraphs$knee,        femaleFastGraphs$knee, nrow = 5)
 dev.off()
 
 # To convert NCBI ids to human entrez ids. There are ways to adapt it for Nfur only, but for now I do everything based on human orthologs
@@ -185,9 +180,7 @@ con <- list(YOUNG = c(-1,1,0,0),
 
 tests <- c('genotype', 'genotype', 'age', 'age', 'age+genotype')
 
-experimentGroups <- list(MALE_FULL = DEobj[,DEobj$samples$sex == 'male' & DEobj$samples$feed == 'full'],
-                         MALE_FASTED = DEobj[,DEobj$samples$sex == 'male' & DEobj$samples$feed == 'fasted'],
-                         FEMALE_FULL = DEobj[,DEobj$samples$sex == 'female' & DEobj$samples$feed == 'full'],
+experimentGroups <- list(MALE_FASTED = DEobj[,DEobj$samples$sex == 'male' & DEobj$samples$feed == 'fasted'],
                          FEMALE_FASTED = DEobj[,DEobj$samples$sex == 'female' & DEobj$samples$feed == 'fasted'])
 
 FCs <- list()
@@ -219,8 +212,7 @@ con <- list(MALE = c(-1,1,0,0),
 
 tests <- c( 'age', 'age','sex', 'sex', 'age+sex')
 
-experimentGroups <- list(WT_FULL = DEobj[,DEobj$samples$genotype == 'WT' & DEobj$samples$feed == 'full'],
-                         WT_FASTED = DEobj[,DEobj$samples$genotype == 'WT' & DEobj$samples$feed == 'fasted'])
+experimentGroups <- list(WT_FASTED = DEobj[,DEobj$samples$genotype == 'WT' & DEobj$samples$feed == 'fasted'])
 
 FCs2 <- list()
 pvals2 <- list()
@@ -300,21 +292,18 @@ for (i in 21:length(files)){ #c(3,5,8,10)
 }
 
 # calculate FC matrix for y/o and wt/het----
-cpmMaleFull <- log2(cpm(experimentGroups$MALE_FULL, normalized.lib.sizes = T)+1)
 cpmMaleFast <- log2(cpm(experimentGroups$MALE_FASTED, normalized.lib.sizes = T)+1)
-cpmFemaleFull <- log2(cpm(experimentGroups$FEMALE_FULL, normalized.lib.sizes = T)+1)
 cpmFemaleFast <- log2(cpm(experimentGroups$FEMALE_FASTED, normalized.lib.sizes = T)+1)
 
-FCall <- merge(merge(merge(FCs2$MALE_FULL, FCs2$MALE_FASTED, by=0), FCs2$FEMALE_FULL, by.x="Row.names", by.y=0), FCs2$FEMALE_FASTED, by.x="Row.names", by.y=0)
+FCall <- merge(FCs2$MALE_FASTED, FCs2$FEMALE_FASTED, by=0)
 rownames(FCall) = FCall$Row.names
-#FCall[-c(1,6,11,16)] = -FCall[-c(1,6,11,16)]  # change the direction for age, genotype but no in the interaction
 FCall = FCall[2:length(FCall)]
 
-pvalall <- merge(merge(merge(pvals2$MALE_FULL, pvals2$MALE_FASTED, by=0), pvals2$FEMALE_FULL, by.x="Row.names", by.y=0), pvals2$FEMALE_FASTED, by.x="Row.names", by.y=0) 
+pvalall <- merge(pvals2$MALE_FASTED, pvals2$FEMALE_FASTED, by=0)
 rownames(pvalall) = pvalall$Row.names
 pvalall = pvalall[2:length(pvalall)]
 
-FDRall <- merge(merge(merge(FDRs2$MALE_FULL, FDRs2$MALE_FASTED, by=0), FDRs2$FEMALE_FULL, by.x="Row.names", by.y=0), FDRs2$FEMALE_FASTED, by.x="Row.names", by.y=0)
+FDRall <- merge(FDRs2$MALE_FASTED, FDRs2$FEMALE_FASTED, by=0)
 rownames(FDRall) = FDRall$Row.names
 FDRall = FDRall[2:length(FDRall)]
 
@@ -332,10 +321,10 @@ pvalwtVShet <- pvalall[,grep("YOUNG|OLD", colnames(pvalall))]
 FDRwtVShet <- FDRall[,grep("YOUNG|OLD", colnames(FDRall))]
 infoTableFCwtVShet <- infoTableFC[infoTableFC$genotype == 'WT',]
 infoTableFCwtVShet$genotype <- 'het/wt'
-colnames(FCwtVShet) <- 1:8
-colnames(pvalwtVShet) <- 1:8
-colnames(FDRwtVShet) <- 1:8
-rownames(infoTableFCwtVShet) <- 1:8
+colnames(FCwtVShet) <- 1:4
+colnames(pvalwtVShet) <- 1:4
+colnames(FDRwtVShet) <- 1:4
+rownames(infoTableFCwtVShet) <- 1:4
 infoTableFCwtVShet <- infoTableFCwtVShet[order(infoTableFCwtVShet$age),]
 FCwtVShet <- FCwtVShet[,rownames(infoTableFCwtVShet)]
 pvalwtVShet <- pvalwtVShet[,rownames(infoTableFCwtVShet)]
@@ -347,14 +336,14 @@ pvalyVSo <- pvalall[,grep("WT|HET", colnames(pvalall))]
 FDRyVSo <- FDRall[,grep("WT|HET", colnames(FDRall))]
 infoTableFCyVSo <- infoTableFC[infoTableFC$age == '6.5weeks',]
 infoTableFCyVSo$age <- 'o/y'
-colnames(FCyVSo) <- 1:8
-colnames(FDRyVSo) <- 1:8
-colnames(pvalyVSo) <- 1:8
-rownames(infoTableFCyVSo) <- 1:8
+colnames(FCyVSo) <- 1:4
+colnames(FDRyVSo) <- 1:4
+colnames(pvalyVSo) <- 1:4
+rownames(infoTableFCyVSo) <- 1:4
 
 
 # saving the object to the visualization script----
-save(DEobj, cpmMaleFull, cpmMaleFast, cpmFemaleFull, cpmFemaleFast, 
+save(DEobj, cpmMaleFast, cpmFemaleFast, 
      FCwtVShet, FDRwtVShet, infoTableFCwtVShet, 
      FCyVSo, FDRyVSo, infoTableFCyVSo, file = paste0(path,'outputFiles/data.RDataRev'))
 #age
