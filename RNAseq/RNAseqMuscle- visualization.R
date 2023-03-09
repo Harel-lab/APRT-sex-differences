@@ -13,7 +13,7 @@ library(clusterProfiler)  #4.0.5
 library(cowplot)          #1.1.1
 library(stringr)
 
-path <- 'C:/Users/tehil/Dropbox/Projects/APRT/paper/RNAseqMuscle/'
+path <- 'RNAseqMuscle/'
 load(paste0(path,'outputFiles/data.RDataRev'))
 
 # To convert NCBI ids to human entrez ids. There are ways to adapt it for nfur only, but for now I do everything based on human orthologs
@@ -117,7 +117,6 @@ threeGroupsCompare <- function(path, group, test, DB, nameG, ont= '', pvalCutoff
   #col names for describe table
   colNamesGeneral <- c('ONTOLOGY', 'ID', 'Description')
   
-  
   tablePvalNES <- merge(tables[[1]][colNamesGroup], tables[[2]][colNamesGroup], all=T, by='ID', suffixes=paste0('.', names(group)[1:2]))
   tablePathwaysNames <- merge(tables[[1]], tables[[2]], by=colNamesGeneral,all=T, suffixes=paste0('.', names(group)[1:2]))
   
@@ -177,7 +176,6 @@ for (i in 4:length(groups)){
 }
 
 # after GSEA analysis- draw heatmap on specific core genes in interesting pathway(s)----
-
 # GO to the gene list; the gene list for each GO pathway
 goterms <- AnnotationDbi::Ontology(GO.db::GOTERM)
 go2gene <- suppressMessages(AnnotationDbi::mapIds(org.Hs.eg.db, keys=names(goterms), column='SYMBOL', keytype="GOALL", multiVals='list'))
@@ -185,7 +183,6 @@ goAnno <- stack(go2gene)
 colnames(goAnno) <- c('SYMBOL', "GOID")
 goAnno <- unique(goAnno[!is.na(goAnno[,1]), ])
 goAnno$ONTOLOGYALL <- goterms[goAnno$GOID]
-
 
 actualHeatmap <- function(cpm.data, infoData, geneList, goID, average=F, convertNames = T, splitCol = 'none', clusterRows=T, clusterSamples = F, geneOrder=NA, scaleT = T,
                           filterGenes=F, fdr=NA, fdrMfc=NA, cutoff=0.05, hirerByAnoutherDS = F, Adataset = c(), infoDS = 'none', ...){
@@ -319,8 +316,6 @@ GOdots <- function(GoCompareEnrichmentGroup, chosenPathways, group, title="GO", 
   
   goVisDF[is.na(goVisDF)] = 0
   
-  
-  #goVisDF$p_adjust[goVisDF$p_adjust > 0.05] = 0
   goVisDF$sig <- c(goVisDF$FDR < 0.05)
   goVisDF$sig <- replace(goVisDF$sig, goVisDF$sig==T, 'Sig')
   goVisDF$sig <- replace(goVisDF$sig, goVisDF$sig==F, 'NS')
@@ -371,23 +366,13 @@ GoCompareEnrichmentGroupAge <- read.xlsx(paste0(path, '/GO/Results/MergedAnalysi
 #GoCompareEnrichmentGroupGenotype <- read.xlsx(paste0(path, '/GO/Results/MergedAnalysis/GOBP_compare_genotype in all.xlsx'), sheetName = 'genotype')
 GoCompareEnrichmentGroupAS <- read.xlsx(paste0(path, '/GO/Results/MergedAnalysis/GOBP_compare_age+sex in all.xlsx'), sheetName = 'age+sex')
 
-# comparison between ages in fasted muscle
+# comparison between ages in fasted muscle- Figure S2F
 chosenPathways <- read.csv(paste0(path, 'inputFiles/pathways age in fasted muscle.csv'), row.names=1)
 goID <- chosenPathways$ID
 names(goID) <- chosenPathways$Description
 
 godots <- GOdots(GoCompareEnrichmentGroupAge, chosenPathways, c('MALE_FASTED_WT', 'MALE_FASTED_HET', 'FEMALE_FASTED_WT', 'FEMALE_FASTED_HET'), "GO age in fasted", c(1,2,3,4,5,6,7,8), c(21,19,19,19,19,19,19,19))
 pdf(paste0(path, 'figures/rev GO age in fasted muscle.pdf'), width = 6.5, height = 5)
-plot(godots)
-dev.off()
-
-#  interaction muscle
-chosenPathways <- read.csv(paste0(path, 'inputFiles/pathways interaction muscle.csv'), row.names=1)
-goID <- chosenPathways$ID
-names(goID) <- chosenPathways$Description
-
-godots <- GOdots(GoCompareEnrichmentGroupAS, chosenPathways, c('WT_FASTED_'), "GO age+sex WT") #, c(1,2,3,4,5,6,7,8), c(21,19,19,19,19,19,19,19))
-pdf(paste0(path, 'figures/rev GO interaction WT muscle.pdf'), width = 6.5, height = 5)
 plot(godots)
 dev.off()
 
@@ -399,50 +384,17 @@ names(goID) <- chosenPathways$Description
 geneSetList <- list()
 for (p in 1:length(goID)){
   geneSetHuman <- unique(goAnno[goAnno$GOID == goID[p],]$SYMBOL)
-  #geneSetHuman <- strsplit(GoCompareEnrichmentGroupAS[GoCompareEnrichmentGroupAS$Description == names(goID[p]),'core_enrichment.WT_FASTED_'], '/')[[1]]
   geneSetKf <- c(humanKfConversion[humanKfConversion$human %in% geneSetHuman,]$ncbi)
   geneSetList[[names(goID)[p]]] <- geneSetKf
 }
 
-pdf(paste0(path, 'figures/GSVA interaction.pdf')) # driver genes
+pdf(paste0(path, 'figures/GSVA interaction.pdf'))
 
 GSVAhm <- GSVAheatmap(cpmALL[, DEobj$samples[DEobj$samples$feed == 'fasted' & DEobj$samples$genotype == 'WT', ]$sample],
                       DEobj$samples[DEobj$samples$feed == 'fasted' & DEobj$samples$genotype == 'WT',], geneSetList)
 draw(GSVAhm, column_title = "WT fasted") # driver genes
 
 dev.off()
-
-# wt het
-pdf(paste0(path, 'figures/GSVA interaction2 wt het.pdf')) # driver genes
-GSVAhm <- GSVAheatmap(cpmALL[, DEobj$samples[DEobj$samples$feed == 'fasted', ]$sample],
-                      DEobj$samples[DEobj$samples$feed == 'fasted',], geneSetList)
-draw(GSVAhm, column_title = "WT fasted") # driver genes
-dev.off()
-
-
-# inflammation----
-goID <-  c('GO:0045088')
-names(goID) <-  c('regulation of innate immune response')
-
-for (p in 1:length(goID)){
-  pdf(paste0(path, 'figures/Heatmap ', names(goID[p]), '2.pdf'))
-  
-  geneSetHuman <- unique(goAnno[goAnno$GOID == goID[p],]$SYMBOL)
-  geneSetKf <-c(humanKfConversion[humanKfConversion$human %in% geneSetHuman,]$ncbi)
-  
-  # male full average and sample
-  hm <- actualHeatmap(cpmMaleFull, DEobj$samples[DEobj$samples$sex == 'male' & DEobj$samples$feed == 'full',], geneSetKf, names(goID[p])) 
-  draw(hm, column_title = "male fully fed samples")
-  
-  # male fasted average and sample
-  hm <- actualHeatmap(cpmMaleFast, DEobj$samples[DEobj$samples$sex == 'male' & DEobj$samples$feed == 'fasted',], geneSetKf, names(goID[p])) 
-  draw(hm, column_title = "male fasted samples")
-  
-  dev.off()
-}
-
-
-
 
 # barplots ----
 barplotExpression <- function(gene){
@@ -679,14 +631,12 @@ g = 'ppargc1a'
 barplotExpression4(cpmALL[g, DEobj$samples[DEobj$samples$feed == 'fasted', ]$sample], DEobj$samples[DEobj$samples$feed == 'fasted', ],g, F)
 barplotExpression4(cpmALL[g, DEobj$samples[DEobj$samples$feed == 'fasted' & DEobj$samples$genotype == 'WT', ]$sample], DEobj$samples[DEobj$samples$feed == 'fasted' & DEobj$samples$genotype == 'WT', ],g, F)
 
-#figure S1g
+#figure S2E
 pdf(paste0(path, '/figures/APRT expression.pdf'), width = 4, height = 3)
 plot(barplotExpression('aprt'))
 dev.off()
 
-plot(barplotExpression3('ppargc1a'))
-
-#rev
+#Figure S2G
 genesG <- read.csv(paste0(path, 'inputFiles/rev age.csv'))
 pdf(paste0(path, '/figures/barplots age.pdf'), width = 6, height = 5)
 for (i in 1:nrow(genesG)){ #
@@ -701,26 +651,9 @@ for (i in 1:nrow(genesG)){ #
 }
 dev.off()
 
-#
-genesG <- read.csv(paste0(path, 'inputFiles/genes WT interactionATP.csv'))
-aa = humanKfConversion[humanKfConversion$human %in% genesG$Human,]
-aa$FinalSymbol = convertLoc2symbol(aa$ncbi)
-colnames(aa) = c('NCBI', 'Human', 'FinalSymbol')
-write.csv(aa, paste0(path, 'inputFiles/genes WT interactionATP.csv'))
-
-
-#rev WT fasted
+#Figure S2H
 genesG <- read.csv(paste0(path, 'inputFiles/genes WT interaction4.csv'))
 pdf(paste0(path, '/figures/barplots WT fasted interaction4.pdf'), width = 5, height = 3)
-
-genesG <- read.csv(paste0(path, 'inputFiles/genes WT interactionATP.csv'))
-genesG <- genesG[genesG$NCBI %in% rownames(cpmALL),]
-pdf(paste0(path, '/figures/barplots WT fasted interactionATP.pdf'), width = 6, height = 4)
-
-
-genesG <- data.frame(NCBI = geneSetKf$`Nucleotide salvage`, FinalSymbol = convertLoc2symbol(geneSetKf$`Nucleotide salvage`))
-genesG <- genesG[genesG$NCBI %in% rownames(cpmALL),]
-pdf(paste0(path, '/figures/barplots Salvage.pdf'), width = 6, height = 4)
 
 for (i in 1:nrow(genesG)){ #
   gene = genesG$NCBI[i]
@@ -731,21 +664,3 @@ for (i in 1:nrow(genesG)){ #
   print(plot_grid(mWTnorm, mWT, ncol = 2,align = "v"))
 }
 dev.off()
-
-
-# AMP salvage ----
-hGenes = read.csv(paste0(path, 'inputFiles/genes salvage reactom.csv'))
-goID = unique(hGenes$ï..Des)
-names(goID) = unique(hGenes$ï..Des)
-geneSetKf = list()
-for (it in names(goID)){
-  geneSetKf[[it]] <- c(humanKfConversion[humanKfConversion$human %in% hGenes[hGenes$ï..Des == goID[it],]$Hunam.gene,]$ncbi)
-}
-
-
-GSVAhmfastedSalv <- GSVAheatmap(cpmALL[, DEobj$samples[DEobj$samples$feed == 'fasted', ]$sample], DEobj$samples[DEobj$samples$feed == 'fasted', ], geneSetKf)
-
-pdf(paste0(path, '/figures/GSVA salvage.pdf'), width = 6, height = 4)
-draw(GSVAhmfastedSalv, column_title = "salvage")
-dev.off()
-
